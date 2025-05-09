@@ -1,11 +1,12 @@
+require('dotenv').config();
 const sqlite3 = require("sqlite3").verbose();
 const axios = require("axios");
 const cheerio = require("cheerio");
 
-const WEBHOOK_URL = "";
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const DB_FILE = "sales.db";
 
-const POLLING_INTERVAL = 6 * 1000 * 60 * 60;
+const POLLING_INTERVAL = process.env.POLLING_INTERVAL * 1000 * 60 * 60;
 
 const queue = [];
 let isProcessing = false;
