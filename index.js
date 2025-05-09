@@ -1,10 +1,11 @@
 const sqlite3 = require('sqlite3').verbose();
 const axios = require('axios');
 const cheerio = require('cheerio');
-const Steam = require('steam-sale');
 
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1370455735015702528/OzT4tVh1Yea2nDv3ip3veS7ImZOIWlzFi7nmSGJBMISMgOWMQaPTahrUUWEBZOU59Wve';
+const WEBHOOK_URL = 'https://discord.com/api/webhooks/1370460630623981730/EIccpdAUctUIr5g_oK2ruRqvTBbAED-cw_o2EnUbjxtRhmFWVwRs3mFBWCwHhjx6igV_';
 const DB_FILE = 'sales.db';
+
+const POLLING_INTERVAL = 6 * 1000 * 60 * 60
 
 const queue = [];
 let isProcessing = false;
@@ -146,7 +147,7 @@ async function processQueue() {
   
       try {
         await axios.post(WEBHOOK_URL, message).then(() => {
-            console.log(`Message sent to Discord: ${message}`);
+            console.log(`Message sent to Discord: ${message.content}`);
         }).catch(err => console.error('Error sending message to Discord: ', err.message));
       } catch (error) {
         if (error.response && error.response.status === 429) {
@@ -199,20 +200,49 @@ async function checkSteamSales(done = [], start = 0, max = 100) {
                         insertSale(game.gameID, game.discountAmount, game.oldPrice, game.salePrice, game.saleTimestamp);
                         
                         let gameLink = $(element).attr('href');
-                        const message = {
-                            content: `🎮 **${game.gameName}** is on sale for **${game.salePrice}**! [Check it out here](${gameLink})`
+                        let message;
+
+                        if (game.discountAmount >= 75) {
+                            message = {
+                                content: `🎮 **${game.gameName}** is now available for just **${game.salePrice}**—that's an unbelievable **${game.discountAmount}% off**! [Grab it here](${gameLink})`
+                            };
+                        } else if (game.discountAmount >= 50) {
+                            message = {
+                                content: `🎮 **${game.gameName}** is on sale for **${game.salePrice}**! That's a huge **${game.discountAmount}% off** the original price! [Don't miss out here](${gameLink})`
+                            };
+                        } else if (game.discountAmount >= 30) {
+                            message = {
+                                content: `🎮 **${game.gameName}** is now only **${game.salePrice}**—that's **${game.discountAmount}% off** the regular price! [Check it out here](${gameLink})`
+                            };
+                        } else if (game.discountAmount >= 20) {
+                            message = {
+                                content: `🎮 **${game.gameName}** is discounted to **${game.salePrice}**—that's **${game.discountAmount}% off**! [Take a look here](${gameLink})`
+                            };
+                        } else {
+                            message = {
+                                content: `🎮 **${game.gameName}** is now only **${game.salePrice}**—just **${game.discountAmount}% off**. [Check it out here](${gameLink})`
+                            };
                         }
+
                         addToQueue(message);
                     }
                 });
 
             }
         });
-        console.log(games);
     } catch (err) {
         console.error('Error checking steam sales: ', err.message);
     }
 }
 
-initializeDatabase();
-checkSteamSales();
+async function startPolling() {
+    initializeDatabase();
+    console.log('Starting periodic poll for new steam sales...');
+    await checkSteamSales(); 
+    
+    setInterval(async () => {
+       await checkSteamSales(); 
+    }, POLLING_INTERVAL);
+}
+
+startPolling();
