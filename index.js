@@ -3,8 +3,11 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const Steam = require('steam-sale');
 
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1370444346607800320/4Lai5iqHlPykBvLm8dgku9JrD6tPAedUgfq2YMfHBXOG-f1PxJugs_v45uO93z3EyjZF';
+const WEBHOOK_URL = 'https://discord.com/api/webhooks/1370455735015702528/OzT4tVh1Yea2nDv3ip3veS7ImZOIWlzFi7nmSGJBMISMgOWMQaPTahrUUWEBZOU59Wve';
 const DB_FILE = 'sales.db';
+
+const queue = [];
+let isProcessing = false;
 
 const db = new sqlite3.Database(DB_FILE, (err) => {
     if (err) {
@@ -128,13 +131,48 @@ async function getExpiryDate(gameID) {
     }
 }
 
+function addToQueue(message) {
+    queue.push(message);
+    processQueue();
+}
+
+async function processQueue() {
+    if (isProcessing) return;
+  
+    isProcessing = true;
+  
+    while (queue.length > 0) {
+      const message = queue.shift();
+  
+      try {
+        await axios.post(WEBHOOK_URL, message).then(() => {
+            console.log(`Message sent to Discord: ${message}`);
+        }).catch(err => console.error('Error sending message to Discord: ', err.message));
+      } catch (error) {
+        if (error.response && error.response.status === 429) {
+          console.log('Rate limit hit! Waiting...');
+          const retryAfter = parseInt(error.response.headers['retry-after'], 10) || 1000;
+          console.log(`Waiting for ${retryAfter}ms before retrying...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter));
+          continue;
+        } else {
+          console.error('Error sending message:', error.message);
+          break; 
+        }
+      }
+  
+      await new Promise(resolve => setTimeout(resolve, 1000)); 
+    }
+  
+    isProcessing = false;
+}
+
 async function checkSteamSales(done = [], start = 0, max = 100) {
     try {
         let response = await axios.get(`https://store.steampowered.com/search/results/?query&start=${start}&count=${max}&category1=998%2C21%2C994&supportedlang=english&specials=1&hidef2p=1&infinite=1`);
         let $ = cheerio.load(response.data.results_html);
 
         let games = [];
-        let i = 1;
 
         $('.search_result_row').each(async (index, element) => {
             let game = {};
@@ -162,13 +200,9 @@ async function checkSteamSales(done = [], start = 0, max = 100) {
                         
                         let gameLink = $(element).attr('href');
                         const message = {
-                            content: `🎮 **${game.gameName}** is on sale for **${game.gamePrice}**! [Check it out here](${gameLink})`
+                            content: `🎮 **${game.gameName}** is on sale for **${game.salePrice}**! [Check it out here](${gameLink})`
                         }
-                        console.log("SENT")
-                        // axios.post(WEBHOOK_URL, message).then(() => {
-                        //     console.log(`Sent message about ${game.gameName} to Discord.`);
-                        // }).catch(err => console.error('Error sending message to Discord: ', err.message));
-                        i++;
+                        addToQueue(message);
                     }
                 });
 
