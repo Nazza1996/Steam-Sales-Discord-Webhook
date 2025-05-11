@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    environment:
+      - WEBHOOK_URL=https://discord.com/api/webhooks/1371114825656045679/QmIAKh-8uhE4Vb68oXfNUL3qFaSGiXfn_B6GIU-sOxEanfJfu5vJsesmQT-_DSYLMImR
+      - POLLING_INTERVAL=6
+    ports: []
